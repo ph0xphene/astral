@@ -1,0 +1,34 @@
+[package]
+name = "astral"
+version = "0.1.0"
+edition = "2024"
+description = "Graph-augmented semantic RAG and 3D topology for Solidity security audits"
+
+[dependencies]
+# --- AST Parser module ---
+tree-sitter = "0.26.10"
+tree-sitter-solidity = "1.2.13"
+walkdir = "2.5.0"
+
+# --- Vector ingestion & storage (LanceDB) ---
+# arrow-* pinned to the major version lancedb 0.31 is built against;
+# bump them together or RecordBatch types won't line up.
+lancedb = "0.31.0"
+arrow-array = "58"
+arrow-schema = "58"
+fastembed = "5.17.2"
+
+# --- Async runtime (lancedb API is async) ---
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros"] }
+futures = "0.3.32"
+
+# --- Common ---
+anyhow = "1.0.103"
+thiserror = "2.0.18"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+
+# fastembed runs ONNX inference; without optimizations embedding a large
+# codebase in debug builds is painfully slow.
+[profile.dev.package."*"]
+opt-level = 2

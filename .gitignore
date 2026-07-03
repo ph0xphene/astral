@@ -1,0 +1,16 @@
+/target
+
+# local artifacts
+/.lancedb_data
+/.fastembed_cache
+/astral_graph.json
+/astral_graph.html
+
+# generated analysis outputs
+/analysis/lance_dataset_export.json
+/analysis/semantic_risk_report.json
+/analysis/semantic_risk_report.md
+/analysis/semantic_risk_map.png
+
+# local editor/agent settings
+/.claude
