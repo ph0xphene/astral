@@ -1,111 +1,157 @@
-# astral
+# Astral: Vector-Space Security Analysis for Smart Contracts
 
-**Local semantic RAG and topology analysis for Solidity security audits.**
+**Find semantic anomalies that pattern-based scanners miss.**
 
-`astral` turns a Solidity codebase into a searchable function graph. It parses
-contracts with tree-sitter, embeds function-level chunks with a local
-MiniLM model, stores them in embedded LanceDB, and retrieves audit context in
-two passes: semantic nearest neighbors first, then the internal helpers,
-modifiers, state variables, and external calls those functions touch.
+Astral is a local analysis toolkit for Solidity codebases that combines
+function-level embeddings, graph-aware code context, and unsupervised outlier
+detection. Instead of only asking "does this code match a known bug pattern?",
+Astral asks a more audit-native question:
 
-No API keys. No hosted database. No source code leaves your machine.
+> Which functions are semantically unusual for this protocol, and why?
 
-## Why auditors use it
+That makes Astral useful for finding suspicious fork deviations, isolated
+privileged flows, custom accounting logic, low-level call paths, and other
+logic-level risks that often survive classical static analysis.
 
-Manual review breaks down when a protocol spreads one invariant across
-modifiers, libraries, adapters, mocks, and inherited contracts. Plain vector
-search helps, but it often returns a relevant function without the dependency
-context that makes it dangerous.
+## Value Proposition
 
-`astral` keeps both views:
+Traditional scanners are excellent at known patterns. Astral is designed for
+unknown weirdness.
 
-- **Semantic memory**: "show me withdrawal/reentrancy/oracle code" lands near
-  relevant functions even when names differ.
-- **Structural memory**: every chunk carries `referenced_symbols`, so retrieval
-  expands from the semantic hit to the concrete code it depends on.
-- **Topology view**: export the codebase as a 3D graph and hunt for hubs,
-  isolated risky functions, low-level calls, and unexpected state coupling.
-- **Offline risk analysis**: run vector-space outlier detection and cluster
-  deviation analysis over the stored embeddings.
+It embeds Solidity functions into a vector space, analyzes the geometry of that
+space with algorithms such as Local Outlier Factor (LOF), and links the results
+back to concrete source code, referenced symbols, risk scores, and topology.
+The output is not a replacement for Slither, Mythril, Foundry, or manual review.
+It is a triage layer that tells an auditor where the codebase is structurally
+and semantically least ordinary.
 
-## Install
+## Astral vs Traditional Smart-Contract Tools
 
-Requirements:
+| Dimension | Traditional Static Analysis | Astral |
+| --- | --- | --- |
+| Primary method | Rules, AST patterns, symbolic checks, known vulnerability classes | Embeddings, vector geometry, graph expansion, anomaly scoring |
+| Best at | Reentrancy patterns, unchecked calls, access-control smells, compiler-level issues | Logic anomalies, custom fork changes, isolated risky flows, unusual semantic clusters |
+| Failure mode | Misses bugs that do not match a known rule | Surfaces suspicious code that still needs human interpretation |
+| Output | Findings mapped to predefined detectors | Ranked audit targets with semantic and structural context |
+| Mental model | "Does this look like a known bug?" | "Does this function behave unlike the rest of this system?" |
+| Auditor workflow | Confirm or dismiss detector alerts | Investigate high-signal anomalies first |
 
-- macOS or Linux
-- Rust stable, installed via [rustup](https://rustup.rs)
-- `protoc` from protobuf; on macOS the installer can install it with Homebrew
+## Quick Start
 
-From a checkout:
+```bash
+curl -fsSL https://raw.githubusercontent.com/merelinmrelin-web/astral/main/scripts/install.sh | bash
+
+astral ingest ./contracts
+astral query "withdrawal flow with low-level calls" 10
+astral export-graph
+```
+
+The installer clones the latest `main` branch, builds the Rust CLI in release
+mode, and installs `astral` to `~/.local/bin/astral`. To install somewhere else:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/merelinmrelin-web/astral/main/scripts/install.sh | bash -s -- --prefix /usr/local
+```
+
+Typical local workflow:
+
+```bash
+# Build the semantic database from Solidity sources
+astral ingest ./contracts
+
+# Retrieve graph-expanded audit context
+astral query "withdrawal flow with low-level calls" 10
+
+# Export topology for visual review
+astral export-graph
+```
+
+Generated analysis artifacts are local by design. Source code, embeddings, and
+reports do not need to leave your machine.
+
+## Why Vector Analysis?
+
+Most smart-contract scanners look for symptoms:
+
+- a low-level call before a state update
+- an unchecked return value
+- a missing access modifier
+- a dangerous opcode
+- a known arithmetic or approval pattern
+
+Those checks are valuable, but many high-impact audit findings are not obvious
+syntax patterns. They are deviations from the protocol's own internal logic.
+
+For example, imagine a DeFi protocol forked from a battle-tested codebase. Most
+ERC20 functions, oracle reads, accounting helpers, and bridge adapters cluster
+tightly because they share similar structure and semantics. Then one function
+inside the accounting cluster sits far from the centroid:
+
+| Signal | Interpretation |
+| --- | --- |
+| Same cluster as standard accounting helpers | The function appears to belong to a familiar subsystem |
+| High distance from cluster centroid | Its implementation diverges from peer functions |
+| Low connectivity | Few other functions reference it, so manual reviewers may skip it |
+| High low-level-operation density | The divergence includes operationally risky code |
+| Elevated `risk_score` | Static metadata also considers it structurally dangerous |
+
+Astral treats that function as a red flag even if no predefined detector fires.
+That is the core idea: use vector geometry to find code that is not merely
+"bug-shaped", but "project-weird".
+
+## Analysis Pipeline
+
+```text
+Solidity source
+  -> AST parsing
+  -> function-level chunks
+  -> referenced symbol extraction
+  -> MiniLM embeddings
+  -> vector database
+  -> LOF / clustering / centroid-distance analysis
+  -> ranked audit targets
+```
+
+| Stage | What Astral Computes | Why It Matters |
+| --- | --- | --- |
+| Parsing | Function names, contracts, source ranges, raw code | Keeps findings tied to auditable source locations |
+| Symbol extraction | Calls, modifiers, state references, external interactions | Adds structural context to semantic hits |
+| Embedding | 384-dimensional function vectors | Captures similarity beyond exact tokens |
+| LOF | Local vector-space outliers | Finds functions unlike their semantic neighborhood |
+| Clustering | Dense semantic groups | Separates oracle logic, token logic, math, adapters, mocks |
+| Cluster deviation | Distance from cluster centroid | Highlights custom changes inside reused/forked mechanisms |
+| Risk scoring | Static metadata plus low-level operation density | Prioritizes anomalies with exploit-relevant structure |
+
+## Example: Logical Anomaly, Not Pattern Match
+
+Suppose two functions both contain a low-level call:
+
+| Function | Pattern Scanner View | Astral View |
+| --- | --- | --- |
+| `SafeExecutor.execute()` | Known guarded executor pattern; low-level call detected | Semantically close to other executor functions; lower anomaly priority |
+| `Vault.withdraw()` | Low-level call detected | Also isolated, far from accounting peers, high risk density; higher audit priority |
+
+The difference is context. A pattern scanner sees the same primitive. Astral
+asks whether that primitive appears in an expected semantic neighborhood.
+
+## Core Commands
+
+| Command | Purpose |
+| --- | --- |
+| `astral ingest <dir>` | Parse Solidity files, embed function chunks, and build the local vector store |
+| `astral query "<text>" [k]` | Retrieve semantic matches and expand them with dependency context |
+| `astral query-json "<text>" [k]` | Return raw KNN hits and distances for retrieval debugging |
+| `astral export-graph [out.json]` | Export topology JSON and a self-contained HTML graph viewer |
+
+## Offline LOF Analysis
+
+The installed CLI builds the semantic database and graph. For the full LOF /
+cluster-deviation report, run the analysis script from a source checkout:
 
 ```bash
 git clone https://github.com/merelinmrelin-web/astral.git
 cd astral
-scripts/install.sh
-```
 
-The installer builds `astral` in release mode and copies the binary to
-`~/.local/bin/astral`. Use a different prefix when needed:
-
-```bash
-scripts/install.sh --prefix /usr/local
-```
-
-If `~/.local/bin` is not on your `PATH`, add:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-## Quickstart
-
-```bash
-astral ingest path/to/contracts
-astral query "reentrancy in withdrawal flow" 5
-astral export-graph
-open astral_graph.html
-```
-
-First ingestion downloads the embedding model into `.fastembed_cache`
-(`~90 MB`) and creates `.lancedb_data` in the project directory.
-
-For local development without installing:
-
-```bash
-make ingest CONTRACTS=contracts
-make query QUERY="low level calls before state update"
-make graph
-```
-
-## Commands
-
-| Command | Purpose |
-| --- | --- |
-| `astral parse <dir>` | Parse Solidity files and print semantic chunks as JSON without touching the DB. |
-| `astral ingest <dir>` | Parse, embed, and upsert chunks into `.lancedb_data`. |
-| `astral query <text> [k]` | Two-pass retrieval as Markdown: primary matches plus dependency context. |
-| `astral query-json <text> [k]` | Raw KNN results with distances for retrieval debugging. |
-| `astral export-graph [out.json]` | Export topology JSON and a self-contained 3D HTML viewer. |
-
-Add `--include-mocks` before the command to keep `mocks/`, `tests/`, and
-`interfaces/` paths in retrieval and graph exports. They are skipped by default.
-
-## Vector risk analysis
-
-`analysis/semantic_risk_analysis.py` runs outlier detection, clustering,
-risk-vs-connectivity scoring, and a 2D risk map over the embedding space.
-
-If you have a Parquet dump:
-
-```bash
-python3 analysis/semantic_risk_analysis.py \
-  --input astral_dump.parquet \
-  --out-dir analysis
-```
-
-If you want to analyze the local LanceDB table:
-
-```bash
 cargo run --bin export_lance_analysis -- \
   .lancedb_data solidity_chunks analysis/lance_dataset_export.json
 
@@ -115,98 +161,45 @@ python3 analysis/semantic_risk_analysis.py \
   --out-dir analysis
 ```
 
-Generated reports and maps are intentionally ignored by git.
+## Output Artifacts
 
-## Architecture
-
-```text
-.sol files
-  -> tree-sitter parser
-  -> semantic function chunks
-  -> fastembed AllMiniLM-L6-v2 embeddings
-  -> embedded LanceDB table
-  -> semantic KNN + graph expansion
-  -> Markdown audit context / 3D topology / offline statistics
-```
-
-Core modules:
-
-- `src/parser.rs`: extracts functions, constructors, modifiers,
-  `fallback`/`receive`, and referenced symbols.
-- `src/chunker.rs`: builds stable chunk IDs and embedding text.
-- `src/storage.rs`: owns LanceDB, fastembed, ingestion, KNN, and full-text search.
-- `src/retrieval.rs`: assembles primary semantic hits plus dependency context.
-- `src/visualizer.rs`: builds the 3D graph and structural risk score.
-- `src/bin/export_lance_analysis.rs`: exports vectors for offline Python analysis.
-
-## 3D topology
-
-`astral export-graph` writes:
-
-- `astral_graph.json`: topology data
-- `astral_graph.html`: standalone WebGL viewer
-
-Node colors:
-
-| Color | Meaning |
+| Artifact | Description |
 | --- | --- |
-| `#ff0055` | body contains a low-level call (`call`, `delegatecall`, `staticcall`, `selfdestruct`) |
-| `#4e7cff` | function |
-| `#ffd166` | constructor |
-| `#8a2be2` | modifier |
-| `#ff8c42` | `fallback` / `receive` |
-| `#00ffcc` | state variable |
-| `#94a3b8` | unresolved external call |
+| `semantic_risk_report.json` | Machine-readable anomaly report |
+| `semantic_risk_report.md` | Human-readable audit triage report |
+| `semantic_risk_map.png` | 2D projection of the embedding space colored by risk |
+| `astral_graph.json` | Function/reference topology graph |
+| `astral_graph.html` | Interactive local graph viewer |
 
-Good first targets: red nodes with many inbound links, isolated red nodes,
-state variables touched by unrelated clusters, and forked-standard functions
-that sit far from their cluster center in vector analysis.
+## What to Investigate First
 
-## Development
+Astral is most useful when a function has several independent risk signals:
 
-```bash
-make test
-make check
-make fmt
-```
-
-Useful targets:
-
-| Target | Purpose |
+| Signal | Why Auditors Should Care |
 | --- | --- |
-| `make install` | Build and install to `$(PREFIX)/bin`, default `~/.local/bin`. |
-| `make build` | Release-build the CLI. |
-| `make test` | Run installer smoke tests and Rust tests. |
-| `make check` | Compile all targets without producing release artifacts. |
-| `make graph` | Export the current local topology viewer. |
-| `make analyze` | Export LanceDB rows and run vector risk analysis. |
-| `make clean-local` | Remove local DB/model/report/viewer artifacts. |
+| High LOF score | The function is locally unusual in vector space |
+| High centroid distance | It deviates from the cluster it appears to belong to |
+| High `risk_score` | Static structure suggests dangerous behavior |
+| Low connectivity | The function may be a hidden edge path |
+| Low-level operation density | The code touches calls, delegatecalls, assembly, or raw memory/storage |
+| Sensitive symbol references | The function interacts with balances, ownership, or cross-chain endpoints |
 
-## Troubleshooting
+The strongest red flags are not merely "high risk" or "high anomaly". They are
+where semantic weirdness and exploit-relevant structure overlap.
 
-**`protoc` is missing**
+## Design Principles
 
-Install protobuf:
+- **Local-first**: no hosted vector DB, no required API keys, no source upload.
+- **Auditor-first**: every score must point back to concrete source code.
+- **Complementary**: Astral augments static analyzers; it does not replace them.
+- **Unsupervised by default**: useful even before a labeled vulnerability corpus exists.
+- **Protocol-relative**: suspicious means unusual for this codebase, not unusual
+  in the abstract.
 
-```bash
-brew install protobuf          # macOS
-sudo apt-get install protobuf-compiler  # Debian/Ubuntu
-```
+## Status
 
-**First ingest is slow**
+Astral is an experimental security research tool. Treat its output as a ranked
+review queue, not as a proof of safety or exploitability.
 
-The first run downloads and initializes the embedding model. Later runs reuse
-`.fastembed_cache`.
-
-**Query results include mocks**
-
-By default, mocks/tests/interfaces are filtered out. If you need them, run:
-
-```bash
-astral --include-mocks query "endpoint delegate flow" 10
-```
-
-**The graph opens blank from a remote browser**
-
-Open `astral_graph.html` from the same machine that generated it. The viewer is
-self-contained and designed for local `file://` use.
+Run it alongside traditional tools, then spend human attention where the vector
+space says the system is least normal.

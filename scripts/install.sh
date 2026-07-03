@@ -1,16 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DEFAULT_REPO_URL="https://github.com/merelinmrelin-web/astral.git"
+SCRIPT_PATH="${BASH_SOURCE[0]:-$0}"
+if [[ -n "$SCRIPT_PATH" && -f "$SCRIPT_PATH" ]]; then
+  ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+else
+  ROOT_DIR="$(pwd)"
+fi
 PREFIX="${ASTRAL_PREFIX:-$HOME/.local}"
 DRY_RUN=0
 SKIP_PROTOBUF_INSTALL=0
+REPO_URL="${ASTRAL_REPO_URL:-$DEFAULT_REPO_URL}"
+WORK_DIR=""
 
 usage() {
   cat <<'USAGE'
 Usage: scripts/install.sh [options]
 
-Build and install the astral CLI from this checkout.
+Build and install the astral CLI.
 
 Options:
   --prefix <dir>              Install prefix (default: ~/.local)
@@ -19,6 +27,7 @@ Options:
   -h, --help                  Show this help
 
 Examples:
+  curl -fsSL https://raw.githubusercontent.com/merelinmrelin-web/astral/main/scripts/install.sh | bash
   scripts/install.sh
   scripts/install.sh --prefix /usr/local
   ASTRAL_PREFIX="$HOME/.local" scripts/install.sh
@@ -70,7 +79,22 @@ done
 BIN_DIR="$PREFIX/bin"
 TARGET_BIN="$BIN_DIR/astral"
 
-[[ -f "$ROOT_DIR/Cargo.toml" ]] || die "run this script from an astral checkout"
+cleanup() {
+  if [[ -n "$WORK_DIR" && -d "$WORK_DIR" ]]; then
+    rm -rf "$WORK_DIR"
+  fi
+}
+trap cleanup EXIT
+
+if [[ ! -f "$ROOT_DIR/Cargo.toml" ]]; then
+  if ! command -v git >/dev/null 2>&1; then
+    die "git is required when installing from the one-line installer"
+  fi
+  WORK_DIR="$(mktemp -d)"
+  log "cloning $REPO_URL"
+  run git clone --depth 1 "$REPO_URL" "$WORK_DIR/astral"
+  ROOT_DIR="$WORK_DIR/astral"
+fi
 
 log "install prefix: $PREFIX"
 log "target binary: $TARGET_BIN"
