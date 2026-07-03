@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEFAULT_REPO_URL="https://github.com/merelinmrelin-web/astral.git"
+DEFAULT_REPO_URL="https://github.com/ph0xphene/astral.git"
 SCRIPT_PATH="${BASH_SOURCE[0]:-$0}"
 if [[ -n "$SCRIPT_PATH" && -f "$SCRIPT_PATH" ]]; then
   ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
@@ -27,7 +27,7 @@ Options:
   -h, --help                  Show this help
 
 Examples:
-  curl -fsSL https://raw.githubusercontent.com/merelinmrelin-web/astral/main/scripts/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/ph0xphene/astral/main/scripts/install.sh | bash
   scripts/install.sh
   scripts/install.sh --prefix /usr/local
   ASTRAL_PREFIX="$HOME/.local" scripts/install.sh

@@ -39,7 +39,7 @@ and semantically least ordinary.
 ## Quick Start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/merelinmrelin-web/astral/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ph0xphene/astral/main/scripts/install.sh | bash
 
 astral ingest ./contracts
 astral query "withdrawal flow with low-level calls" 10
@@ -50,7 +50,7 @@ The installer clones the latest `main` branch, builds the Rust CLI in release
 mode, and installs `astral` to `~/.local/bin/astral`. To install somewhere else:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/merelinmrelin-web/astral/main/scripts/install.sh | bash -s -- --prefix /usr/local
+curl -fsSL https://raw.githubusercontent.com/ph0xphene/astral/main/scripts/install.sh | bash -s -- --prefix /usr/local
 ```
 
 Typical local workflow:
@@ -149,7 +149,7 @@ The installed CLI builds the semantic database and graph. For the full LOF /
 cluster-deviation report, run the analysis script from a source checkout:
 
 ```bash
-git clone https://github.com/merelinmrelin-web/astral.git
+git clone https://github.com/ph0xphene/astral.git
 cd astral
 
 cargo run --bin export_lance_analysis -- \

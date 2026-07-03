@@ -27,7 +27,7 @@ trap 'rm -rf "$outside_checkout"' EXIT
 
 curl_style_output="$(cd "$outside_checkout" && bash -s -- --dry-run --prefix "$outside_checkout/prefix" < "$INSTALL_SH")"
 case "$curl_style_output" in
-  *"cloning https://github.com/merelinmrelin-web/astral.git"*"/prefix/bin/astral"* ) ;;
+  *"cloning https://github.com/ph0xphene/astral.git"*"/prefix/bin/astral"* ) ;;
   *)
     echo "expected curl-style dry-run output to clone astral and describe target binary path" >&2
     exit 1
