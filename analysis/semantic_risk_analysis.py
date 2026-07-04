@@ -312,19 +312,20 @@ def explain_unique(row: Row, cluster_size: int, centroid_z: float, low_ops: int)
     code = row.code_content
     sig = code.split("{", 1)[0].strip().replace("\n", " ")
     if row.kind != "function":
-        traits.append(f"тип `{row.kind}`")
+        traits.append(f"definition kind `{row.kind}`")
     if low_ops:
-        traits.append(f"{low_ops} низкоуровневых операций")
+        op_word = "operation" if low_ops == 1 else "operations"
+        traits.append(f"{low_ops} low-level {op_word}")
     rare_refs = [s for s in row.referenced_symbols if "." in s or s.startswith("_")]
     if rare_refs:
-        traits.append("редкие/внешние символы: " + ", ".join(rare_refs[:3]))
+        traits.append("rare/external symbols: " + ", ".join(rare_refs[:3]))
     if centroid_z > 1.0:
-        traits.append(f"дистанция до центроида кластера z={centroid_z:.2f}")
+        traits.append(f"cluster centroid distance z={centroid_z:.2f}")
     if cluster_size <= 3:
-        traits.append(f"малый кластер ({cluster_size} функции)")
+        traits.append(f"small cluster (n={cluster_size})")
     if not traits and sig:
-        traits.append("сигнатура: " + sig[:120])
-    return "; ".join(traits) or "семантически удалена от ближайших соседей"
+        traits.append("signature: " + sig[:120])
+    return "; ".join(traits) or "semantically distant from nearest neighbors"
 
 
 def color_for_risk(risk: float) -> tuple[int, int, int]:
